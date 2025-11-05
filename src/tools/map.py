@@ -133,7 +133,11 @@ def generate_map(
     for _, row in df.iterrows():
         adresse = row["address"]
         circuit = row["cluster"]
+        nom = list_circuits.circuits[circuit].nom
         color = stats_cluster["color"][circuit]
+        popup = folium.Popup(
+            f"<b>Adresse:</b> {adresse}<br><b>Circuit:</b> {nom}", max_width=300
+        )
         folium.CircleMarker(
             location=[row["lat"], row["lon"]],
             radius=5,
@@ -141,7 +145,7 @@ def generate_map(
             fill=True,
             fill_color=color,
             fill_opacity=0.6,
-            popup=adresse,
+            popup=popup,
         ).add_to(m)
     return m, stats_cluster.to_dict()
 
