@@ -98,7 +98,10 @@ def get_street_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def weighted_spatial_clustering(
-    df: pd.DataFrame, column_to_balance: str, n_clusters: int
+    df: pd.DataFrame,
+    column_to_balance: str | None,
+    n_clusters: int,
+    random_state: int = 42,
 ):
     logger.info("Starting Weighted Spatial Clustering")
     logger.info(f"Clustering {column_to_balance} with {n_clusters} clusters")
@@ -108,9 +111,10 @@ def weighted_spatial_clustering(
         weights = None
     else:
         weights = df[column_to_balance].values
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42).fit(
+    kmeans = KMeans(n_clusters=n_clusters, random_state=random_state).fit(
         X, sample_weight=weights
     )
+
     result_df["cluster"] = kmeans.labels_
     stats_cluster = result_df.groupby("cluster").agg({"count": "sum", "length": "sum"})
     logger.info(f"Clustering Complete for {column_to_balance}")
