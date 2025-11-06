@@ -2,6 +2,7 @@ from math import radians, cos, sin, sqrt, atan2
 import pandas as pd
 from sklearn.cluster import KMeans
 import structlog
+from src.tools.capacitated_kmeans import capacitated_kmeans_autodetect
 
 logger = structlog.get_logger()
 
@@ -97,32 +98,6 @@ def get_street_data(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def weighted_spatial_clustering(
-    df: pd.DataFrame,
-    column_to_balance: str | None,
-    n_clusters: int,
-    random_state: int = 42,
-):
-    logger.info("Starting Weighted Spatial Clustering")
-    logger.info(f"Clustering {column_to_balance} with {n_clusters} clusters")
-    result_df = df.copy()
-    X = df[["lat", "lon"]].values
-    if column_to_balance is None:
-        weights = None
-    else:
-        weights = df[column_to_balance].values
-    kmeans = KMeans(n_clusters=n_clusters, random_state=random_state).fit(
-        X, sample_weight=weights
-    )
-
-    result_df["cluster"] = kmeans.labels_
-    stats_cluster = result_df.groupby("cluster").agg({"count": "sum", "length": "sum"})
-    logger.info(f"Clustering Complete for {column_to_balance}")
-    logger.info(stats_cluster)
-    logger.info("Clustering Complete")
-    return result_df, stats_cluster
-
-
 def add_cluster_to_df(df: pd.DataFrame, df_cluster: pd.DataFrame) -> pd.DataFrame:
     """
     Add the cluster column to the df dataframe.
@@ -148,6 +123,37 @@ def make_balanced_clustering(
     )
     df = add_cluster_to_df(df, df_clustered)
     return df, stats_cluster
+
+
+def weighted_spatial_clustering(
+    df: pd.DataFrame,
+    column_to_balance: str | None,
+    n_clusters: int,
+    random_state: int = 42,
+):
+    logger.info("Starting Weighted Spatial Clustering")
+    logger.info(f"Clustering {column_to_balance} with {n_clusters} clusters")
+    result_df = df.copy()
+
+    if column_to_balance is None:
+        X = df[["lat", "lon"]].values
+        kmeans = KMeans(n_clusters=n_clusters, random_state=random_state).fit(X)
+        result_df["cluster"] = kmeans.labels_
+        centers = kmeans.cluster_centers_
+    else:
+        result_df, centers = capacitated_kmeans_autodetect(
+            df, k=n_clusters, weight_col=column_to_balance
+        )
+
+    stats_cluster = result_df.groupby("cluster").agg({"count": "sum", "length": "sum"})
+    # Add the centers to the stats_cluster dataframe
+
+    stats_cluster["lat"] = centers[:, 0]
+    stats_cluster["lon"] = centers[:, 1]
+    logger.info(f"Clustering Complete for {column_to_balance}")
+    logger.info(stats_cluster)
+    logger.info("Clustering Complete")
+    return result_df, stats_cluster
 
 
 if __name__ == "__main__":
