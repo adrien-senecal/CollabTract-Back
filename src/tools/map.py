@@ -23,6 +23,7 @@ class ListCircuitsParams(BaseModel):
     circuits: list[CircuitParams] = []
     random_state: int = 42
     clustering_method: str = "kmeans"
+    seed: int = 42
 
 
 def build_address(row):
@@ -111,15 +112,15 @@ def generate_map(
 
         if clustering_method == "kmeans":
             df, stats_cluster = make_balanced_clustering(
-                df, None, list_circuits.nbr_circuits
+                df, None, list_circuits.nbr_circuits, list_circuits.seed
             )
         elif clustering_method == "balanced_length":
             df, stats_cluster = make_balanced_clustering(
-                df, "length", list_circuits.nbr_circuits
+                df, "length", list_circuits.nbr_circuits, list_circuits.seed
             )
         elif clustering_method == "balanced_count":
             df, stats_cluster = make_balanced_clustering(
-                df, "count", list_circuits.nbr_circuits
+                df, "count", list_circuits.nbr_circuits, list_circuits.seed
             )
         else:
             logger.error("Invalid method", method=clustering_method)

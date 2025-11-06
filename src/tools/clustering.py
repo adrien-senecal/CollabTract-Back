@@ -112,6 +112,7 @@ def make_balanced_clustering(
     df: pd.DataFrame,
     column_to_balance: str,
     n_clusters: int,
+    seed: int = 42,
 ) -> pd.DataFrame:
     """
     Make a balanced clustering of the df dataframe.
@@ -119,7 +120,7 @@ def make_balanced_clustering(
     df_streets = get_street_data(df)
 
     df_clustered, stats_cluster = weighted_spatial_clustering(
-        df_streets, column_to_balance, n_clusters
+        df_streets, column_to_balance, n_clusters, seed
     )
     df = add_cluster_to_df(df, df_clustered)
     return df, stats_cluster
@@ -129,7 +130,7 @@ def weighted_spatial_clustering(
     df: pd.DataFrame,
     column_to_balance: str | None,
     n_clusters: int,
-    random_state: int = 42,
+    seed: int = 42,
 ):
     logger.info("Starting Weighted Spatial Clustering")
     logger.info(f"Clustering {column_to_balance} with {n_clusters} clusters")
@@ -137,12 +138,12 @@ def weighted_spatial_clustering(
 
     if column_to_balance is None:
         X = df[["lat", "lon"]].values
-        kmeans = KMeans(n_clusters=n_clusters, random_state=random_state).fit(X)
+        kmeans = KMeans(n_clusters=n_clusters, random_state=seed).fit(X)
         result_df["cluster"] = kmeans.labels_
         centers = kmeans.cluster_centers_
     else:
         result_df, centers = capacitated_kmeans_autodetect(
-            df, k=n_clusters, weight_col=column_to_balance
+            df, k=n_clusters, weight_col=column_to_balance, random_state=seed
         )
 
     stats_cluster = result_df.groupby("cluster").agg({"count": "sum", "length": "sum"})

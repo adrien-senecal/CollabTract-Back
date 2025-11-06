@@ -25,6 +25,7 @@ class MapRequest(BaseModel):
     cluster_nbr: int = 1
     clustering_method: str = "kmeans"
     cluster_colors: list[str] | None = None
+    seed: int = 42
 
 
 app = FastAPI()
@@ -151,6 +152,7 @@ async def get_city_map_html(request: MapRequest):
                 for i, color in enumerate(cluster_colors[: request.cluster_nbr])
             ],
             clustering_method=request.clustering_method,
+            seed=request.seed,
         )
 
         # Generate the map
