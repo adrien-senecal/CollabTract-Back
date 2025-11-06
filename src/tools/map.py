@@ -23,6 +23,7 @@ class ListCircuitsParams(BaseModel):
     circuits: list[CircuitParams] = []
     random_state: int = 42
     clustering_method: str = "kmeans"
+    seed: int = 42
 
 
 def build_address(row):
@@ -111,15 +112,15 @@ def generate_map(
 
         if clustering_method == "kmeans":
             df, stats_cluster = make_balanced_clustering(
-                df, None, list_circuits.nbr_circuits
+                df, None, list_circuits.nbr_circuits, list_circuits.seed
             )
         elif clustering_method == "balanced_length":
             df, stats_cluster = make_balanced_clustering(
-                df, "length", list_circuits.nbr_circuits
+                df, "length", list_circuits.nbr_circuits, list_circuits.seed
             )
         elif clustering_method == "balanced_count":
             df, stats_cluster = make_balanced_clustering(
-                df, "count", list_circuits.nbr_circuits
+                df, "count", list_circuits.nbr_circuits, list_circuits.seed
             )
         else:
             logger.error("Invalid method", method=clustering_method)
@@ -129,11 +130,16 @@ def generate_map(
         stats_cluster = pd.DataFrame({"count": [len(df)], "length": None})
     for i in range(list_circuits.nbr_circuits):
         stats_cluster.loc[i, "color"] = list_circuits.circuits[i].color
+        stats_cluster.loc[i, "name"] = list_circuits.circuits[i].nom
 
     for _, row in df.iterrows():
         adresse = row["address"]
         circuit = row["cluster"]
+        nom = list_circuits.circuits[circuit].nom
         color = stats_cluster["color"][circuit]
+        popup = folium.Popup(
+            f"<b>Adresse:</b> {adresse}<br><b>Circuit:</b> {nom}", max_width=300
+        )
         folium.CircleMarker(
             location=[row["lat"], row["lon"]],
             radius=5,
@@ -141,7 +147,7 @@ def generate_map(
             fill=True,
             fill_color=color,
             fill_opacity=0.6,
-            popup=adresse,
+            popup=popup,
         ).add_to(m)
     return m, stats_cluster.to_dict()
 

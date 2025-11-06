@@ -419,3 +419,5 @@ FodyWeavers.xsd
 
 .vscode/
 /data/csv
+.ipynb_checkpoints/
+map.html

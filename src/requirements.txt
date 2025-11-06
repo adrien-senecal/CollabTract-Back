@@ -12,3 +12,6 @@ jinja2
 python-multipart
 folium
 pyarrow
+geopandas
+shapely
+networkx
