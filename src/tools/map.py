@@ -130,6 +130,7 @@ def generate_map(
         stats_cluster = pd.DataFrame({"count": [len(df)], "length": None})
     for i in range(list_circuits.nbr_circuits):
         stats_cluster.loc[i, "color"] = list_circuits.circuits[i].color
+        stats_cluster.loc[i, "name"] = list_circuits.circuits[i].nom
 
     for _, row in df.iterrows():
         adresse = row["address"]
