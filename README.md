@@ -66,8 +66,8 @@ CollabTract/
 - **Description**: Generate interactive map with clustering for route optimization
 - **Request Body**: MapRequest object with the following fields:
   - `city_name` (string): Name of the city to map
-  - `dep_code` (int|string): Department code
-  - `cluster_nbr` (int, optional): Number of clusters for route optimization (default: 1)
+  - `department_code` (int|string): Department code
+  - `cluster_count` (int, optional): Number of clusters for route optimization (default: 1)
   - `clustering_method` (string, optional): Clustering algorithm (default: "kmeans")
   - `cluster_colors` (list[string], optional): Custom hex colors for clusters
 - **Response**: HTML content of the interactive map with clustered addresses
@@ -173,8 +173,8 @@ The application uses the following configuration (defined in `src/settings.py`):
         -H "Content-Type: application/json" \
         -d '{
           "city_name": "Paris",
-          "dep_code": 75,
-          "cluster_nbr": 5,
+          "department_code": 75,
+          "cluster_count": 5,
           "clustering_method": "kmeans"
         }'
    ```
@@ -186,8 +186,8 @@ The application uses the following configuration (defined in `src/settings.py`):
         -H "Content-Type: application/json" \
         -d '{
           "city_name": "Lyon",
-          "dep_code": 69,
-          "cluster_nbr": 3,
+          "department_code": 69,
+          "cluster_count": 3,
           "cluster_colors": ["#ff0000", "#00ff00", "#0000ff"]
         }'
    ```

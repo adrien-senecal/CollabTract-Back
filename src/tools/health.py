@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Dict, Any
 import os
 
-from ..settings import COMMUNES_FRANCE_FILENAME
+from ..settings import MUNICIPALITIES_DATA_PATH
 
 
 class HealthResponse(BaseModel):
@@ -18,7 +18,7 @@ def check_database_connection() -> Dict[str, Any]:
     try:
         # Check if data files exist
         required_files = [
-            COMMUNES_FRANCE_FILENAME,
+            MUNICIPALITIES_DATA_PATH,
         ]
 
         missing_files = []
