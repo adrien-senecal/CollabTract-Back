@@ -1,2 +1,2 @@
 CSV_FOLDER = "./data/csv"
-COMMUNES_FRANCE_FILENAME = "./data/communes-france-2025.parquet"
+MUNICIPALITIES_DATA_PATH = "./data/communes-france-2025.parquet"

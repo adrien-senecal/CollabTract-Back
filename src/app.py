@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 import structlog
 from .tools.get_city import get_city_by_name, get_cities_by_postal_code
-from .tools.map import generate_map, ListCircuitsParams, CircuitParams
+from .tools.map import generate_map, RouteListConfig, RouteConfig
 from .tools.color_code import generate_distinct_colors
 from . import __version__
 from .tools.health import (
@@ -21,10 +21,11 @@ logger = structlog.get_logger()
 
 class MapRequest(BaseModel):
     city_name: str
-    dep_code: int | str
-    cluster_nbr: int = 1
+    department_code: int | str
+    cluster_count: int = 1
     clustering_method: str = "kmeans"
     cluster_colors: list[str] | None = None
+    seed: int = 42
 
 
 app = FastAPI()
@@ -93,7 +94,7 @@ async def get_city(city: str = None, postal_code: str = None):
         postal_code: Postal code to search for
 
     Returns:
-        JSON response with city information containing nom_standard and dep_code
+        JSON response with city information containing standard_name and department_code
     """
     try:
         if city:
@@ -119,45 +120,46 @@ async def get_city(city: str = None, postal_code: str = None):
 @app.post("/map", response_class=JSONResponse)
 async def get_city_map_html(request: MapRequest):
     """
-    Generate and return HTML for a city map with clustering and stats_cluster.
+    Generate and return HTML for a city map with clustering and cluster statistics.
 
     Args:
         request: MapRequest object containing the parameters.
             - city_name: Name of the city.
-            - dep_code: Department code (as string, converted to int).
-            - cluster_nbr: Number of clusters (must be > 0).
+            - department_code: Department code (as string, converted to int).
+            - cluster_count: Number of clusters (must be > 0).
             - clustering_method: Method used for clustering (e.g., "kmeans").
             - cluster_colors: List of hex colors for clusters (e.g., ["#ff0000", "#00ff00"]).
 
     Returns:
-        JSONResponse: Raw HTML of the Folium map for embedding and stats_cluster
+        JSONResponse: Raw HTML of the Folium map for embedding and cluster statistics
     """
     try:
 
         if (
             not request.cluster_colors
-            or len(request.cluster_colors) < request.cluster_nbr
+            or len(request.cluster_colors) < request.cluster_count
         ):
-            # cluster_colors = make_color_code(request.cluster_nbr)
-            cluster_colors = generate_distinct_colors(request.cluster_nbr)
+            # cluster_colors = make_color_code(request.cluster_count)
+            cluster_colors = generate_distinct_colors(request.cluster_count)
         else:
             cluster_colors = request.cluster_colors
 
-        # Create CircuitParams dynamically from cluster_colors
-        list_circuits = ListCircuitsParams(
-            nbr_circuits=request.cluster_nbr,
-            circuits=[
-                CircuitParams(nom=f"Cluster {i+1}", color=color)
-                for i, color in enumerate(cluster_colors[: request.cluster_nbr])
+        # Create RouteConfig instances dynamically from cluster_colors
+        routes_config = RouteListConfig(
+            route_count=request.cluster_count,
+            routes=[
+                RouteConfig(name=f"Cluster {i+1}", color=color)
+                for i, color in enumerate(cluster_colors[: request.cluster_count])
             ],
             clustering_method=request.clustering_method,
+            seed=request.seed,
         )
 
         # Generate the map
-        folium_map, stats_cluster = generate_map(
+        folium_map, cluster_stats = generate_map(
             city_name=request.city_name,
-            dep_code=request.dep_code,
-            list_circuits=list_circuits,
+            department_code=request.department_code,
+            routes_config=routes_config,
         )
 
         # Return raw HTML (without template)
@@ -165,7 +167,7 @@ async def get_city_map_html(request: MapRequest):
         return JSONResponse(
             content={
                 "map_html": map_html,
-                "stats_cluster": stats_cluster,
+                "cluster_stats": cluster_stats,
             },
             status_code=200,
         )
