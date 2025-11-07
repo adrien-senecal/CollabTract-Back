@@ -39,9 +39,7 @@ def get_cities_by_postal_code(
     df = df[df["postal_code"] == str(postal_code)]
     city_department_records: list[dict[str, str]] = []
     for city in df["standard_name"].unique().tolist():
-        matches = df[df["standard_name"] == city][
-            ["standard_name", "department_code"]
-        ]
+        matches = df[df["standard_name"] == city][["standard_name", "department_code"]]
         city_department_records.extend(matches.to_dict(orient="records"))
     return city_department_records
 
@@ -71,9 +69,7 @@ def get_city_by_name(
     city_names = filter_cities(city_names)
     city_department_records = []
     for city in city_names:
-        matches = df[df["standard_name"] == city][
-            ["standard_name", "department_code"]
-        ]
+        matches = df[df["standard_name"] == city][["standard_name", "department_code"]]
         city_department_records.extend(matches.to_dict(orient="records"))
     return city_department_records
 
