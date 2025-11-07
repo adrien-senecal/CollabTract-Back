@@ -15,29 +15,29 @@ def check_folder_path(folder_path: pathlib.Path | None) -> pathlib.Path:
     return folder_path
 
 
-def validate_departement(departement: str | int) -> str:
+def validate_department_code(department_code: str | int) -> str:
     # Convert to string if it's an integer
-    if isinstance(departement, int):
-        departement = str(departement)
+    if isinstance(department_code, int):
+        department_code = str(department_code)
 
     # Handle string cases (including 'a' or 'b')
-    if isinstance(departement, str):
-        departement = departement.upper()  # Transform 'a' or 'b' to 'A' or 'B'
+    if isinstance(department_code, str):
+        department_code = department_code.upper()  # Transform 'a' or 'b' to 'A' or 'B'
 
         # Check for valid string formats (2A or 2B)
-        if departement in ["2A", "2B"]:
-            return departement
+        if department_code in ["2A", "2B"]:
+            return department_code
 
         # Check for valid integer ranges (01-95 or 971-989)
-        if departement.isdigit():
-            num = int(departement)
+        if department_code.isdigit():
+            num = int(department_code)
             if (1 <= num <= 95) or (971 <= num <= 989):
-                return departement.zfill(
+                return department_code.zfill(
                     2
                 )  # Pad with leading zero if needed (e.g., 1 → "01")
 
     # Return None or raise an error if invalid
-    logger.error("Invalid departement", departement=departement)
+    logger.error("Invalid department", department_code=department_code)
     raise ValueError(
-        f"Invalid departement: {departement}. Must be 01-95, 971-989, or 2A/2B."
+        f"Invalid department: {department_code}. Must be 01-95, 971-989, or 2A/2B."
     )

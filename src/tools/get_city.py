@@ -3,14 +3,25 @@ import pathlib
 import pandas as pd
 from thefuzz import process
 import structlog
-from ..settings import COMMUNES_FRANCE_FILENAME
+from ..settings import MUNICIPALITIES_DATA_PATH
 
 logger = structlog.get_logger()
 
 
+def _load_municipality_data() -> pd.DataFrame:
+    df = pd.read_parquet(MUNICIPALITIES_DATA_PATH)
+    return df.rename(
+        columns={
+            "nom_standard": "standard_name",
+            "dep_code": "department_code",
+            "code_postal": "postal_code",
+        }
+    )
+
+
 def get_cities_by_postal_code(
     postal_code: str | int, folder_path: str | pathlib.Path | None = None
-) -> list[str]:
+) -> list[dict[str, str]]:
     """
     Retrieve the list of cities associated with a given postal code.
 
@@ -20,16 +31,16 @@ def get_cities_by_postal_code(
                     If None, uses the default CSV_FOLDER from settings.
 
     Returns:
-        A list of city names associated with the postal code.
+        A list of dictionaries containing city names and department codes.
     """
     logger.info("Getting city by postal code", postal_code=postal_code)
 
-    df = pd.read_parquet(COMMUNES_FRANCE_FILENAME)
-    df = df[df["code_postal"] == str(postal_code)]
-    city_department_records = []
-    for city in df["nom_standard"].unique().tolist():
-        res = df[df["nom_standard"] == city][["nom_standard", "dep_code"]]
-        city_department_records.extend(res.to_dict(orient="records"))
+    df = _load_municipality_data()
+    df = df[df["postal_code"] == str(postal_code)]
+    city_department_records: list[dict[str, str]] = []
+    for city in df["standard_name"].unique().tolist():
+        matches = df[df["standard_name"] == city][["standard_name", "department_code"]]
+        city_department_records.extend(matches.to_dict(orient="records"))
     return city_department_records
 
 
@@ -47,24 +58,24 @@ def filter_cities(cities: list[tuple[str, int]]) -> list[str]:
 
 def get_city_by_name(
     city_name: str, folder_path: str | pathlib.Path | None = None
-) -> str:
+) -> list[dict[str, str]]:
     """
-    Retrieve the city name associated with a given postal code.
+    Retrieve potential city matches for a given name with their department codes.
     """
     logger.info("Getting city by name", city_name=city_name)
-    df = pd.read_parquet(COMMUNES_FRANCE_FILENAME)
-    list_city_name = df["nom_standard"].unique().tolist()
+    df = _load_municipality_data()
+    list_city_name = df["standard_name"].unique().tolist()
     city_names = process.extractBests(city_name, list_city_name, score_cutoff=80)
     city_names = filter_cities(city_names)
     city_department_records = []
     for city in city_names:
-        res = df[df["nom_standard"] == city][["nom_standard", "dep_code"]]
-        city_department_records.extend(res.to_dict(orient="records"))
+        matches = df[df["standard_name"] == city][["standard_name", "department_code"]]
+        city_department_records.extend(matches.to_dict(orient="records"))
     return city_department_records
 
 
 if __name__ == "__main__":
-    list_communes = get_cities_by_postal_code("30140")
-    print(list_communes)
+    postal_code_matches = get_cities_by_postal_code("30140")
+    print(postal_code_matches)
     city_names = get_city_by_name("Anduza")
     print(city_names)
