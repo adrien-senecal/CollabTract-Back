@@ -3,7 +3,7 @@ import structlog
 import pandas as pd
 from pydantic import BaseModel, Field
 import re
-from .csv_loading import get_address_dataframe
+from .csv_loading import get_cleaned_address_dataframe
 from .clustering import make_balanced_clustering
 
 logger = structlog.get_logger()
@@ -26,39 +26,6 @@ class RouteListConfig(BaseModel):
     seed: int = 42
 
 
-def format_address(row: pd.Series) -> str:
-    """
-    Constructs a standardized address string from a DataFrame row.
-
-    Args:
-        row (pd.Series): A row from the city DataFrame.
-
-    Returns:
-        str: Formatted address string.
-    """
-    # Extract components
-    street_number = (
-        str(int(row["street_number"])) if pd.notna(row["street_number"]) else ""
-    )
-    street_suffix = f" {row['street_suffix']}" if pd.notna(row["street_suffix"]) else ""
-    street_name = row["street_name"] if pd.notna(row["street_name"]) else ""
-    postal_code = str(int(row["postal_code"])) if pd.notna(row["postal_code"]) else ""
-    city_label = row["city_name"] if pd.notna(row["city_name"]) else ""
-
-    # Build address parts
-    address_parts = []
-    if street_number:
-        address_parts.append(street_number + street_suffix)
-    if street_name:
-        address_parts.append(street_name)
-
-    # Combine into full address
-    address_line = ", ".join(address_parts)
-    full_address = f"{address_line}, {postal_code} {city_label}".strip(", ")
-
-    return full_address
-
-
 def generate_map(
     city_name: str,
     department_code: int,
@@ -75,53 +42,21 @@ def generate_map(
         tuple[folium.Map, dict]: The generated map and cluster statistics
     """
     logger.info("Generating map", city_name=city_name, department_code=department_code)
-    department_code = int(department_code)
+    if len(routes_config.routes) < routes_config.route_count:
+        raise ValueError("Route configuration does not match the requested route count")
 
-    # Use department code if provided, otherwise try to extract from city data
+    # Get and clean address dataframe for the city
     try:
-        if not isinstance(department_code, int):
-            logger.error(
-                "Department code must be an integer", department_code=department_code
-            )
-            raise ValueError("Department code must be an integer")
-        df = get_address_dataframe(department_code)
-        df = df[df["city_name"] == city_name]
-        if df.empty:
-            logger.error(
-                "City not found in the department",
-                city_name=city_name,
-                department_code=department_code,
-            )
-            raise ValueError("City not found in the department")
+        df = get_cleaned_address_dataframe(department_code, city_name)
     except Exception as e:
-        logger.error("Error generating map", error=str(e))
-        raise ValueError("Error generating map")
-
-    try:
-        df = df[
-            [
-                "street_number",
-                "street_suffix",
-                "street_name",
-                "postal_code",
-                "city_name",
-                "lat",
-                "lon",
-            ]
-        ]
-    except KeyError as e:
-        logger.error("Error generating map", error=str(e))
-        raise ValueError("Columns not found in the dataframe")
-    df["address"] = df.apply(format_address, axis=1)
+        logger.error("Error getting cleaned address dataframe", error=str(e))
+        raise ValueError("Error getting cleaned address dataframe") from e
     center_lat = df["lat"].mean()
     center_lon = df["lon"].mean()
     logger.info("Center of the map", center_lat=center_lat, center_lon=center_lon)
     m = folium.Map(location=[center_lat, center_lon], zoom_start=14)
 
     # Generate the routes
-    if len(routes_config.routes) < routes_config.route_count:
-        raise ValueError("Route configuration does not match the requested route count")
-
     if routes_config.route_count > 1:
         clustering_method = routes_config.clustering_method
 

@@ -91,3 +91,111 @@ def get_address_dataframe(
             "Failed to read address data file", error=str(e), filepath=filepath
         )
         return pd.DataFrame()  # Return empty DataFrame on error
+
+
+def format_address(row: pd.Series) -> str:
+    """
+    Constructs a standardized address string from a DataFrame row.
+
+    Args:
+        row: A row from the city DataFrame.
+
+    Returns:
+        Formatted address string.
+    """
+    # Extract components
+    street_number = (
+        str(int(row["street_number"])) if pd.notna(row["street_number"]) else ""
+    )
+    street_suffix = f" {row['street_suffix']}" if pd.notna(row["street_suffix"]) else ""
+    street_name = row["street_name"] if pd.notna(row["street_name"]) else ""
+    postal_code = str(int(row["postal_code"])) if pd.notna(row["postal_code"]) else ""
+    city_label = row["city_name"] if pd.notna(row["city_name"]) else ""
+
+    # Build address parts
+    address_parts = []
+    if street_number:
+        address_parts.append(street_number + street_suffix)
+    if street_name:
+        address_parts.append(street_name)
+
+    # Combine into full address
+    address_line = ", ".join(address_parts)
+    full_address = f"{address_line}, {postal_code} {city_label}".strip(", ")
+
+    return full_address
+
+
+def get_cleaned_address_dataframe(
+    department_code: str | int, city_name: str, folder_path: pathlib.Path | None = None
+) -> pd.DataFrame:
+    """
+    Get and clean address data for a specific city in a department.
+
+    Args:
+        department_code: Department code (e.g., "34", "2A", "971")
+        city_name: Name of the city to filter by
+        folder_path: Optional path to the folder where CSV files are stored
+
+    Returns:
+        Cleaned DataFrame with address data for the specified city
+
+    Raises:
+        ValueError: If department code is invalid, city is not found, or required columns are missing
+    """
+    logger.info(
+        "Cleaning address dataframe",
+        department_code=department_code,
+        city_name=city_name,
+    )
+
+    # Convert department code to int (validation happens in get_address_dataframe)
+    try:
+        department_code = int(department_code)
+    except (ValueError, TypeError):
+        logger.error(
+            "Department code must be an integer", department_code=department_code
+        )
+        raise ValueError("Department code must be an integer")
+
+    # Get address dataframe for the department
+    df = get_address_dataframe(department_code, folder_path)
+
+    # Filter by city name
+    df = df[df["city_name"] == city_name]
+    if df.empty:
+        logger.error(
+            "City not found in the department",
+            city_name=city_name,
+            department_code=department_code,
+        )
+        raise ValueError("City not found in the department")
+
+    # Select required columns
+    try:
+        df = df[
+            [
+                "street_number",
+                "street_suffix",
+                "street_name",
+                "postal_code",
+                "city_name",
+                "lat",
+                "lon",
+            ]
+        ]
+    except KeyError as e:
+        logger.error("Columns not found in the dataframe", error=str(e))
+        raise ValueError("Columns not found in the dataframe") from e
+
+    # Add formatted address column
+    df["address"] = df.apply(format_address, axis=1)
+
+    logger.info(
+        "Successfully cleaned address dataframe",
+        rows=len(df),
+        city_name=city_name,
+        department_code=department_code,
+    )
+
+    return df
