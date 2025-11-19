@@ -1,27 +1,9 @@
 import folium
 import structlog
-from pydantic import BaseModel, Field
-import re
+from .route_types import RouteListConfig, RouteConfig
 from .clustering import get_clustered_data
 
 logger = structlog.get_logger()
-
-
-class RouteConfig(BaseModel):
-    name: str
-    color: str | None = None
-
-    # Check if the color is a valid hex color
-    if color and not re.match(r"^#([0-9a-fA-F]{6})$", color):
-        raise ValueError("Invalid hex color")
-
-
-class RouteListConfig(BaseModel):
-    route_count: int = 1
-    routes: list[RouteConfig] = Field(default_factory=list)
-    random_state: int = 42
-    clustering_method: str = "kmeans"
-    seed: int = 42
 
 
 def generate_map(

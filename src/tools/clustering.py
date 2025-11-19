@@ -161,12 +161,14 @@ def weighted_spatial_clustering(
     logger.info("Clustering Complete")
     return result_df, cluster_stats
 
+
 def get_clustered_data(
     department_code: int,
     city_name: str,
     n_clusters: int,
     clustering_method: str = "kmeans",
     seed: int = 42,
+    cluster_id: int | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Get the cleaned address dataframe and perform clustering.
@@ -191,7 +193,7 @@ def get_clustered_data(
         }
 
         if clustering_method not in method_to_column:
-             raise ValueError(f"Invalid clustering method: {clustering_method}")
+            raise ValueError(f"Invalid clustering method: {clustering_method}")
 
         column_to_balance = method_to_column[clustering_method]
 
@@ -205,6 +207,9 @@ def get_clustered_data(
         df["cluster"] = 0
         cluster_stats = pd.DataFrame({"count": [len(df)], "length": [None]})
 
+    if cluster_id is not None:
+        df = df[df["cluster"] == cluster_id]
+
     return df, cluster_stats
 
 
@@ -216,6 +221,7 @@ async def process_cluster_request(request) -> tuple[dict, int]:
             n_clusters=request.cluster_count,
             clustering_method=request.clustering_method,
             seed=request.seed,
+            cluster_id=request.cluster_id,
         )
 
         # Clean for JSON serialization
@@ -230,7 +236,9 @@ async def process_cluster_request(request) -> tuple[dict, int]:
 
     except Exception as e:
         logger.exception("Failed to generate clusters")
-        return JSONResponse(content={"error": f"Failed to generate clusters: {str(e)}"}, status_code=500)
+        return JSONResponse(
+            content={"error": f"Failed to generate clusters: {str(e)}"}, status_code=500
+        )
 
 
 if __name__ == "__main__":

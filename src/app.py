@@ -1,11 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from uvicorn import run
-from pydantic import BaseModel, Field, field_validator
+
 import time
 from datetime import datetime, timezone
 import structlog
-import pandas as pd
 
 from .tools.get_city import get_city_by_name, get_cities_by_postal_code
 from .tools.map import generate_map, RouteListConfig, RouteConfig
@@ -15,23 +14,9 @@ from .tools.health import (
     check_database_connection,
     HealthResponse,
 )
-from .tools.csv_loading import get_cleaned_address_dataframe
-from .tools.clustering import make_balanced_clustering, process_cluster_request
+from .tools.clustering import process_cluster_request
+from .tools.route_types import MapRequest
 
-class MapRequest(BaseModel):
-    city_name: str
-    department_code: int | str
-    cluster_count: int = Field(1, ge=1)
-    clustering_method: str = "kmeans"
-    cluster_colors: list[str] | None = None
-    seed: int = 42
-
-    @field_validator("clustering_method")
-    def validate_clustering_method(cls, v):
-        allowed = {"kmeans", "balanced_length", "balanced_count"}
-        if v not in allowed:
-            raise ValueError(f"clustering_method must be one of: {allowed}")
-        return v
 
 logger = structlog.get_logger()
 
