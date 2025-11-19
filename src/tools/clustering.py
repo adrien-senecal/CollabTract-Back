@@ -2,7 +2,10 @@ from math import radians, cos, sin, sqrt, atan2
 import pandas as pd
 from sklearn.cluster import KMeans
 import structlog
-from src.tools.capacitated_kmeans import capacitated_kmeans_autodetect
+from fastapi.responses import JSONResponse
+
+from .capacitated_kmeans import capacitated_kmeans_autodetect
+from .csv_loading import get_cleaned_address_dataframe
 
 logger = structlog.get_logger()
 
@@ -157,6 +160,77 @@ def weighted_spatial_clustering(
     logger.info(cluster_stats)
     logger.info("Clustering Complete")
     return result_df, cluster_stats
+
+def get_clustered_data(
+    department_code: int,
+    city_name: str,
+    n_clusters: int,
+    clustering_method: str = "kmeans",
+    seed: int = 42,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Get the cleaned address dataframe and perform clustering.
+
+    Args:
+        department_code: Department code
+        city_name: City name
+        n_clusters: Number of clusters
+        clustering_method: Clustering method ("kmeans", "balanced_length", "balanced_count")
+        seed: Random seed
+
+    Returns:
+        tuple[pd.DataFrame, pd.DataFrame]: The dataframe with cluster assignments and cluster statistics
+    """
+    df = get_cleaned_address_dataframe(department_code, city_name)
+
+    if n_clusters > 1:
+        method_to_column = {
+            "kmeans": None,
+            "balanced_length": "length",
+            "balanced_count": "count",
+        }
+
+        if clustering_method not in method_to_column:
+             raise ValueError(f"Invalid clustering method: {clustering_method}")
+
+        column_to_balance = method_to_column[clustering_method]
+
+        df, cluster_stats = make_balanced_clustering(
+            df=df,
+            column_to_balance=column_to_balance,
+            n_clusters=n_clusters,
+            seed=seed,
+        )
+    else:
+        df["cluster"] = 0
+        cluster_stats = pd.DataFrame({"count": [len(df)], "length": [None]})
+
+    return df, cluster_stats
+
+
+async def process_cluster_request(request) -> tuple[dict, int]:
+    try:
+        df, cluster_stats = get_clustered_data(
+            department_code=request.department_code,
+            city_name=request.city_name,
+            n_clusters=request.cluster_count,
+            clustering_method=request.clustering_method,
+            seed=request.seed,
+        )
+
+        # Clean for JSON serialization
+        df = df.replace({pd.NA: None})
+        cluster_stats = cluster_stats.replace({pd.NA: None})
+
+        response = {
+            "dataframe": df.to_dict(orient="records"),
+            "cluster_stats": cluster_stats.to_dict(),
+        }
+        return JSONResponse(content=response, status_code=200)
+
+    except Exception as e:
+        logger.exception("Failed to generate clusters")
+        return JSONResponse(content={"error": f"Failed to generate clusters: {str(e)}"}, status_code=500)
 
 
 if __name__ == "__main__":

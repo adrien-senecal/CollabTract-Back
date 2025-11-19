@@ -1,10 +1,8 @@
 import folium
 import structlog
-import pandas as pd
 from pydantic import BaseModel, Field
 import re
-from .csv_loading import get_cleaned_address_dataframe
-from .clustering import make_balanced_clustering
+from .clustering import get_clustered_data
 
 logger = structlog.get_logger()
 
@@ -47,37 +45,21 @@ def generate_map(
 
     # Get and clean address dataframe for the city
     try:
-        df = get_cleaned_address_dataframe(department_code, city_name)
+        df, cluster_stats = get_clustered_data(
+            department_code=department_code,
+            city_name=city_name,
+            n_clusters=routes_config.route_count,
+            clustering_method=routes_config.clustering_method,
+            seed=routes_config.seed,
+        )
     except Exception as e:
-        logger.error("Error getting cleaned address dataframe", error=str(e))
-        raise ValueError("Error getting cleaned address dataframe") from e
+        logger.error("Error getting clustered data", error=str(e))
+        raise ValueError("Error getting clustered data") from e
+
     center_lat = df["lat"].mean()
     center_lon = df["lon"].mean()
     logger.info("Center of the map", center_lat=center_lat, center_lon=center_lon)
     m = folium.Map(location=[center_lat, center_lon], zoom_start=14)
-
-    # Generate the routes
-    if routes_config.route_count > 1:
-        clustering_method = routes_config.clustering_method
-
-        if clustering_method == "kmeans":
-            df, cluster_stats = make_balanced_clustering(
-                df, None, routes_config.route_count, routes_config.seed
-            )
-        elif clustering_method == "balanced_length":
-            df, cluster_stats = make_balanced_clustering(
-                df, "length", routes_config.route_count, routes_config.seed
-            )
-        elif clustering_method == "balanced_count":
-            df, cluster_stats = make_balanced_clustering(
-                df, "count", routes_config.route_count, routes_config.seed
-            )
-        else:
-            logger.error("Invalid method", method=clustering_method)
-            raise ValueError("Invalid method")
-    else:
-        df["cluster"] = 0
-        cluster_stats = pd.DataFrame({"count": [len(df)], "length": None})
     for i in range(routes_config.route_count):
         cluster_stats.loc[i, "color"] = routes_config.routes[i].color
         cluster_stats.loc[i, "name"] = routes_config.routes[i].name

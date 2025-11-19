@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from uvicorn import run
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 import time
 from datetime import datetime, timezone
 import structlog
@@ -16,15 +16,22 @@ from .tools.health import (
     HealthResponse,
 )
 from .tools.csv_loading import get_cleaned_address_dataframe
-from .tools.clustering import make_balanced_clustering
+from .tools.clustering import make_balanced_clustering, process_cluster_request
 
 class MapRequest(BaseModel):
     city_name: str
     department_code: int | str
-    cluster_count: int = 1
+    cluster_count: int = Field(1, ge=1)
     clustering_method: str = "kmeans"
     cluster_colors: list[str] | None = None
     seed: int = 42
+
+    @field_validator("clustering_method")
+    def validate_clustering_method(cls, v):
+        allowed = {"kmeans", "balanced_length", "balanced_count"}
+        if v not in allowed:
+            raise ValueError(f"clustering_method must be one of: {allowed}")
+        return v
 
 logger = structlog.get_logger()
 
@@ -190,52 +197,7 @@ async def get_cluster(request: MapRequest):
     Returns:
         JSONResponse: Dataframe with cluster assignments and cluster statistics
     """
-    try:
-        # Get and clean address dataframe for the city
-        df = get_cleaned_address_dataframe(request.department_code, request.city_name)
-
-        # Determine clustering method
-        if request.cluster_count > 1:
-            if request.clustering_method == "kmeans":
-                column_to_balance = None
-            elif request.clustering_method == "balanced_length":
-                column_to_balance = "length"
-            elif request.clustering_method == "balanced_count":
-                column_to_balance = "count"
-            else:
-                raise ValueError(f"Invalid clustering method: {request.clustering_method}")
-
-            # Perform clustering
-            df, cluster_stats = make_balanced_clustering(
-                df, column_to_balance, request.cluster_count, request.seed
-            )
-        else:
-            df["cluster"] = 0
-            cluster_stats = pd.DataFrame({"count": [len(df)], "length": None})
-
-        # Convert dataframe to records for JSON response
-        # We need to handle NaN values for JSON serialization if any, but usually cleaned df should be fine.
-        # Using orient='records' to get a list of objects
-        df = df.where(pd.notnull(df), None)
-        cluster_stats = cluster_stats.where(pd.notnull(cluster_stats), None)
-        
-        df_records = df.to_dict(orient="records")
-        cluster_stats_dict = cluster_stats.to_dict()
-
-        return JSONResponse(
-            content={
-                "dataframe": df_records,
-                "cluster_stats": cluster_stats_dict,
-            },
-            status_code=200,
-        )
-
-    except Exception as e:
-        logger.error("Error generating clusters", error=str(e))
-        return JSONResponse(
-            {"error": f"Failed to generate clusters: {str(e)}"},
-            status_code=500,
-        )
+    return await process_cluster_request(request)
 
 
 if __name__ == "__main__":
