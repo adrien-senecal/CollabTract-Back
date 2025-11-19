@@ -1,11 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from uvicorn import run
+from pydantic import BaseModel
 import time
 from datetime import datetime, timezone
-
 import structlog
+import pandas as pd
+
 from .tools.get_city import get_city_by_name, get_cities_by_postal_code
 from .tools.map import generate_map, RouteListConfig, RouteConfig
 from .tools.color_code import generate_distinct_colors
@@ -14,10 +15,8 @@ from .tools.health import (
     check_database_connection,
     HealthResponse,
 )
-
-
-logger = structlog.get_logger()
-
+from .tools.csv_loading import get_cleaned_address_dataframe
+from .tools.clustering import make_balanced_clustering
 
 class MapRequest(BaseModel):
     city_name: str
@@ -27,12 +26,12 @@ class MapRequest(BaseModel):
     cluster_colors: list[str] | None = None
     seed: int = 42
 
+logger = structlog.get_logger()
 
 app = FastAPI()
 
 # Track application start time for uptime calculation
 app_start_time = time.time()
-
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -176,6 +175,65 @@ async def get_city_map_html(request: MapRequest):
         logger.error("Error generating map", error=str(e))
         return JSONResponse(
             {"error": f"Failed to generate map: {str(e)}"},
+            status_code=500,
+        )
+
+
+@app.post("/cluster")
+async def get_cluster(request: MapRequest):
+    """
+    Generate clusters for a city and return the dataframe with cluster assignments.
+
+    Args:
+        request: MapRequest object containing the parameters.
+
+    Returns:
+        JSONResponse: Dataframe with cluster assignments and cluster statistics
+    """
+    try:
+        # Get and clean address dataframe for the city
+        df = get_cleaned_address_dataframe(request.department_code, request.city_name)
+
+        # Determine clustering method
+        if request.cluster_count > 1:
+            if request.clustering_method == "kmeans":
+                column_to_balance = None
+            elif request.clustering_method == "balanced_length":
+                column_to_balance = "length"
+            elif request.clustering_method == "balanced_count":
+                column_to_balance = "count"
+            else:
+                raise ValueError(f"Invalid clustering method: {request.clustering_method}")
+
+            # Perform clustering
+            df, cluster_stats = make_balanced_clustering(
+                df, column_to_balance, request.cluster_count, request.seed
+            )
+        else:
+            df["cluster"] = 0
+            cluster_stats = pd.DataFrame({"count": [len(df)], "length": None})
+
+        # Convert dataframe to records for JSON response
+        # We need to handle NaN values for JSON serialization if any, but usually cleaned df should be fine.
+        # Using orient='records' to get a list of objects
+        df = df.where(pd.notnull(df), None)
+        cluster_stats = cluster_stats.where(pd.notnull(cluster_stats), None)
+        
+        df_records = df.to_dict(orient="records")
+        cluster_stats_dict = cluster_stats.to_dict()
+
+        return JSONResponse(
+            content={
+                "dataframe": df_records,
+                "cluster_stats": cluster_stats_dict,
+            },
+            status_code=200,
+        )
+
+    except Exception as e:
+        logger.error("Error generating clusters", error=str(e))
+        return JSONResponse(
+            {"error": f"Failed to generate clusters: {str(e)}"},
             status_code=500,
         )
 
